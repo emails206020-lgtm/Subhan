@@ -40,12 +40,35 @@ jobs:
           path: .buildozer
           key: buildozer-project-${{ hashFiles('buildozer.spec') }}
 
-      - name: Build APK with buildozer
+      # المحاولة الأولى: قد تفشل بسبب خطأ grpmodule.c المعروف
+      # (NDK الحديث لا يوفر getgrent/setgrent/endgrent، وPython's configure
+      # لا يتحقق من هذا فيسمح ببناء وحدة grp رغم غيابها، فيفشل clang الصارم)
+      - name: First build attempt (may fail on grpmodule.c)
+        continue-on-error: true
+        id: first_attempt
         run: |
-          export CFLAGS="-Wno-error=implicit-function-declaration"
-          export CPPFLAGS="-Wno-error=implicit-function-declaration"
-          export EXTRA_CFLAGS="-Wno-error=implicit-function-declaration"
           yes | buildozer android debug
+
+      # إذا فشلت المحاولة الأولى، نصحح ملف grpmodule.c المصدري مباشرة
+      # بإضافة تعريفات بديلة للدوال المفقودة، ثم نعيد المحاولة
+      - name: Patch grpmodule.c if needed and retry
+        if: steps.first_attempt.outcome == 'failure'
+        run: |
+          GRP_FILE=$(find .buildozer -path "*/Modules/grpmodule.c" 2>/dev/null | head -1)
+          if [ -n "$GRP_FILE" ]; then
+            echo "تم إيجاد الملف: $GRP_FILE"
+            echo "تصحيح grpmodule.c بإضافة grp.h..."
+            # نتأكد أن grp.h مُضمَّن، وهو يحتوي تعريفات هذه الدوال في بعض بيئات NDK
+            sed -i '1i #include <grp.h>' "$GRP_FILE"
+            # كحل احتياطي إضافي: نعطل استدعاءات الدوال غير المتوفرة بالكامل
+            sed -i 's/setgrent();/;/' "$GRP_FILE"
+            sed -i 's/endgrent();/;/' "$GRP_FILE"
+            echo "أعيد محاولة البناء..."
+            yes | buildozer android debug
+          else
+            echo "لم يُعثر على grpmodule.c، الفشل لسبب آخر - عرض آخر جزء من السجل:"
+            exit 1
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4

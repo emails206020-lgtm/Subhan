@@ -200,6 +200,8 @@ class GradientBackground(Widget):
     """خلفية متدرجة متحركة"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.size_hint = (1, 1)
+        self.pos_hint = {"x": 0, "y": 0}
         self.angle = 0
         self.bind(pos=self.update, size=self.update)
         Clock.schedule_interval(self.animate, 0.05)
@@ -307,6 +309,8 @@ class ParticleEffect(Widget):
     """تأثير جزيئات متطايرة"""
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.size_hint = (1, 1)
+        self.pos_hint = {"x": 0, "y": 0}
         self.particles = []
         self.bind(pos=self.update, size=self.update)
     
